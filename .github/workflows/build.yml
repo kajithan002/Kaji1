@@ -1,0 +1,72 @@
+name: Build WaThemer APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -e
+          command -v sdkmanager
+          sdkmanager --version
+          yes | sdkmanager --licenses || true
+          sdkmanager --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "platform-tools"
+
+      - name: Extract source
+        shell: bash
+        run: |
+          set -e
+          ls -la
+
+          ZIP="$GITHUB_WORKSPACE/wathemer-video-wallpaper-source.zip"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "Source ZIP missing from repository root!"
+            exit 1
+          fi
+
+          mkdir -p source
+          unzip -q "$ZIP" -d source
+
+          PROJECT="$GITHUB_WORKSPACE/source/wathemer-main"
+
+          test -f "$PROJECT/gradlew"
+          test -f "$PROJECT/app/build.gradle.kts"
+
+          chmod +x "$PROJECT/gradlew"
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wathemer-video-wallpaper-debug-apk
+          path: source/wathemer-main/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
