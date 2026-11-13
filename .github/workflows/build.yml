@@ -26,10 +26,35 @@ jobs:
         shell: bash
         run: |
           set -e
-          command -v sdkmanager
-          sdkmanager --version
-          yes | sdkmanager --licenses || true
-          sdkmanager --install \
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" \
+            -type f -name sdkmanager 2>/dev/null | sort -V | tail -1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find /usr/local/lib/android \
+              -type f -name sdkmanager 2>/dev/null | head -1)
+          fi
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
+
+          echo "Found SDK Manager: $SDKMANAGER"
+
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+          export PATH="$(dirname "$SDKMANAGER"):$SDK_ROOT/platform-tools:$PATH"
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" --install \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "platform-tools"
@@ -38,12 +63,16 @@ jobs:
         shell: bash
         run: |
           set -e
-          ls -la
 
-          ZIP="$GITHUB_WORKSPACE/wathemer-video-wallpaper-source.zip"
+          ZIP="$GITHUB_WORKSPACE/wathemer-video-wallpaper-source-v2.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "Source ZIP missing from repository root!"
+            ZIP="$GITHUB_WORKSPACE/wathemer-video-wallpaper-source.zip"
+          fi
+
+          if [ ! -f "$ZIP" ]; then
+            echo "Source ZIP missing!"
+            ls -la
             exit 1
           fi
 
